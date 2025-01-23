@@ -58,6 +58,7 @@ typedef struct _TRAYNOTIFYDATAW
  * ProgMan messages
  */
 #define WM_PROGMAN_OPENSHELLSETTINGS (WM_USER + 22) /* wParam specifies the dialog (and tab page) */
+#define WM_PROGMAN_SAVESTATE         (WM_USER + 77)
 
 /****************************************************************************
  *  IDList Functions
@@ -91,6 +92,23 @@ HRESULT WINAPI SHILCreateFromPathW (
     LPCWSTR path,
     LPITEMIDLIST * ppidl,
     DWORD *attributes);
+
+HRESULT WINAPI SHInvokeCommand(
+    HWND hWnd,
+    IShellFolder* lpFolder,
+    LPCITEMIDLIST lpApidl,
+    LPCSTR lpVerb);
+HRESULT WINAPI SHInvokeCommandOnContextMenu(
+    _In_opt_ HWND hWnd,
+    _In_opt_ IUnknown* pUnk,
+    _In_ IContextMenu* pCM,
+    _In_ UINT fCMIC,
+    _In_opt_ LPCSTR pszVerb);
+BOOL WINAPI IContextMenu_Invoke(
+    _In_ IContextMenu *pContextMenu,
+    _In_ HWND hwnd,
+    _In_ LPCSTR lpVerb,
+    _In_ UINT uFlags);
 
 /*
     string functions
@@ -186,12 +204,19 @@ int  WINAPI SHOutOfMemoryMessageBox(
     LPCSTR lpCaption,
     UINT uType);
 
+HRESULT WINAPI SHShouldShowWizards(_In_ IUnknown *pUnknown);
+
 DWORD WINAPI SHNetConnectionDialog(
     HWND hwndOwner,
     LPCWSTR lpstrRemoteName,
     DWORD dwType);
 
 BOOL WINAPI SHIsTempDisplayMode(VOID);
+
+HRESULT WINAPI
+SHGetUserDisplayName(
+    _Out_writes_to_(*puSize, *puSize) PWSTR pName,
+    _Inout_ PULONG puSize);
 
 /****************************************************************************
  * Cabinet Window Messages
@@ -687,6 +712,27 @@ RealShellExecuteExW(
     _Out_opt_ PHANDLE lphProcess,
     _In_ DWORD dwFlags);
 
+VOID WINAPI
+ShellExec_RunDLL(
+    _In_opt_ HWND hwnd,
+    _In_opt_ HINSTANCE hInstance,
+    _In_ PCSTR pszCmdLine,
+    _In_ INT nCmdShow);
+
+VOID WINAPI
+ShellExec_RunDLLA(
+    _In_opt_ HWND hwnd,
+    _In_opt_ HINSTANCE hInstance,
+    _In_ PCSTR pszCmdLine,
+    _In_ INT nCmdShow);
+
+VOID WINAPI
+ShellExec_RunDLLW(
+    _In_opt_ HWND hwnd,
+    _In_opt_ HINSTANCE hInstance,
+    _In_ PCWSTR pszCmdLine,
+    _In_ INT nCmdShow);
+
 /* RegisterShellHook types */
 #define RSH_DEREGISTER        0
 #define RSH_REGISTER          1
@@ -747,6 +793,18 @@ BOOL WINAPI GUIDFromStringA(
 BOOL WINAPI GUIDFromStringW(
     _In_   PCWSTR psz,
     _Out_  LPGUID pguid);
+
+PSTR WINAPI
+StrRStrA(
+    _In_ PCSTR pszSrc,
+    _In_opt_ PCSTR pszLast,
+    _In_ PCSTR pszSearch);
+
+PWSTR WINAPI
+StrRStrW(
+    _In_ PCWSTR pszSrc,
+    _In_opt_ PCWSTR pszLast,
+    _In_ PCWSTR pszSearch);
 
 LPSTR WINAPI SheRemoveQuotesA(LPSTR psz);
 LPWSTR WINAPI SheRemoveQuotesW(LPWSTR psz);

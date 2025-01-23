@@ -279,6 +279,11 @@ VOID WINAPI SHGetSetSettings(LPSHELLSTATE lpss, DWORD dwMask, BOOL bSet)
     if (bSet)
     {
         DWORD changed = 0;
+        if (dwMask & ~g_CachedSSF)
+        {
+            SHELLSTATE tempstate;
+            SHGetSetSettings(&tempstate, dwMask, FALSE); // Read entries that are not in g_CachedSSF
+        }
 
 #define SHGSS_WriteAdv(name, value, SSF) \
     do { \
@@ -1802,6 +1807,7 @@ BOOL WINAPI ReadCabinetState(CABINETSTATE *cs, int length)
 {
 	HKEY hkey = 0;
 	DWORD type, r;
+	C_ASSERT(sizeof(*cs) == FIELD_OFFSET(CABINETSTATE, fMenuEnumFilter) + sizeof(UINT));
 
 	TRACE("%p %d\n", cs, length);
 
@@ -1822,6 +1828,10 @@ BOOL WINAPI ReadCabinetState(CABINETSTATE *cs, int length)
 	if ( (r != ERROR_SUCCESS) || (cs->cLength < sizeof(*cs)) ||
 		(cs->cLength != length) )
 	{
+		SHELLSTATE shellstate;
+		shellstate.fWin95Classic = FALSE;
+		SHGetSetSettings(&shellstate, SSF_WIN95CLASSIC, FALSE);
+
 		TRACE("Initializing shell cabinet settings\n");
 		memset(cs, 0, sizeof(*cs));
 		cs->cLength          = sizeof(*cs);
@@ -1831,11 +1841,11 @@ BOOL WINAPI ReadCabinetState(CABINETSTATE *cs, int length)
 		cs->fNotShell        = FALSE;
 		cs->fSimpleDefault   = TRUE;
 		cs->fDontShowDescBar = FALSE;
-		cs->fNewWindowMode   = FALSE;
+		cs->fNewWindowMode   = shellstate.fWin95Classic;
 		cs->fShowCompColor   = FALSE;
 		cs->fDontPrettyNames = FALSE;
 		cs->fAdminsCreateCommonGroups = TRUE;
-		cs->fMenuEnumFilter  = 96;
+		cs->fMenuEnumFilter  = SHCONTF_FOLDERS | SHCONTF_NONFOLDERS;
 	}
 
 	return TRUE;

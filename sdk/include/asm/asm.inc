@@ -172,6 +172,8 @@ ENDM
     .skip size, fill
 ENDM
 
+#define lXdtPrefix fword ptr
+
 ljmp MACRO segment, offset
     DB 0EAh
     DD offset
@@ -314,18 +316,32 @@ ENDM
 .endm
 
 /* MASM compatible ALIGN */
-#define ALIGN .align
+.macro align x
+    .align x
+.endm
+#define ALIGN align
 
 /* MASM compatible REPEAT, additional ENDR */
 #define REPEAT .rept
 #define ENDR .endr
 
+#define lXdtPrefix
+
 .macro ljmp segment, offset
-    jmp far ptr \segment:\offset
+    .byte 0xEA
+    .long offset
+    .word segment
 .endm
 
 .macro ljmp16 segment, offset
-    jmp far ptr \segment:\offset
+    .byte 0xEA
+    .word offset
+    .word segment
+.endm
+
+.macro data32 opcode:vararg
+    .byte 0x66
+    opcode
 .endm
 
 .macro retf
@@ -338,6 +354,7 @@ ENDM
 
 /* MASM needs an END tag */
 #define END
+#define end
 
 .macro .MODEL model
 .endm
@@ -345,6 +362,7 @@ ENDM
 .macro .code
     .text
 .endm
+#define CODESEG .code
 
 .macro .const
     .section .rdata

@@ -848,7 +848,7 @@ IsConsoleBoot(VOID)
         pwszNextOption = wcschr(pwszCurrentOption, L' ');
         if (pwszNextOption)
             *pwszNextOption = L'\0';
-        if (wcsicmp(pwszCurrentOption, L"CONSOLE") == 0)
+        if (_wcsicmp(pwszCurrentOption, L"CONSOLE") == 0)
         {
             DPRINT("Found %S. Switching to console boot\n", pwszCurrentOption);
             bConsoleBoot = TRUE;
@@ -1049,19 +1049,19 @@ HotkeyThread(LPVOID Parameter)
     DPRINT("HotkeyThread start\n");
 
     hotkey = GlobalAddAtomW(L"Setup Shift+F10 Hotkey");
-
     if (!RegisterHotKey(NULL, hotkey, MOD_SHIFT, VK_F10))
         DPRINT1("RegisterHotKey failed with %lu\n", GetLastError());
 
-    while (GetMessage(&msg, NULL, 0, 0))
+    while (GetMessageW(&msg, NULL, 0, 0))
     {
         if (msg.hwnd == NULL && msg.message == WM_HOTKEY && msg.wParam == hotkey)
         {
+            WCHAR CmdLine[] = L"cmd.exe"; // CreateProcess can modify this buffer.
             STARTUPINFOW si = { sizeof(si) };
             PROCESS_INFORMATION pi;
 
-            if (CreateProcessW(L"cmd.exe",
-                               NULL,
+            if (CreateProcessW(NULL,
+                               CmdLine,
                                NULL,
                                NULL,
                                FALSE,

@@ -1737,44 +1737,13 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     FT_ULong            os2_ulCodePageRange1;
     FT_UShort           os2_usWeightClass;
 
-    if (SharedFace == NULL && CharSetIndex == -1)
-    {
-        /* load a face from memory */
-        IntLockFreeType();
-        Error = FT_New_Memory_Face(
-                    g_FreeTypeLibrary,
-                    pLoadFont->Memory->Buffer,
-                    pLoadFont->Memory->BufferSize,
-                    ((FontIndex != -1) ? FontIndex : 0),
-                    &Face);
+    ASSERT(SharedFace != NULL);
+    ASSERT(FontIndex != -1);
 
-        if (!Error)
-            SharedFace = SharedFace_Create(Face, pLoadFont->Memory);
-
-        IntUnLockFreeType();
-
-        if (!Error && FT_IS_SFNT(Face))
-            pLoadFont->IsTrueType = TRUE;
-
-        if (Error || SharedFace == NULL)
-        {
-            if (SharedFace)
-                SharedFace_Release(SharedFace);
-
-            if (Error == FT_Err_Unknown_File_Format)
-                DPRINT1("Unknown font file format\n");
-            else
-                DPRINT1("Error reading font (error code: %d)\n", Error);
-            return 0;   /* failure */
-        }
-    }
-    else
-    {
-        Face = SharedFace->Face;
-        IntLockFreeType();
-        SharedFace_AddRef(SharedFace);
-        IntUnLockFreeType();
-    }
+    IntLockFreeType();
+    Face = SharedFace->Face;
+    SharedFace_AddRef(SharedFace);
+    IntUnLockFreeType();
 
     /* allocate a FONT_ENTRY */
     Entry = ExAllocatePoolWithTag(PagedPool, sizeof(FONT_ENTRY), TAG_FONT);
@@ -1984,23 +1953,6 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     }
     IntUnLockFreeType();
 
-    if (FontIndex == -1)
-    {
-        if (FT_IS_SFNT(Face))
-        {
-            TT_Face TrueType = (TT_Face)Face;
-            if (TrueType->ttc_header.count > 1)
-            {
-                FT_Long i;
-                for (i = 1; i < TrueType->ttc_header.count; ++i)
-                {
-                    FaceCount += IntGdiLoadFontsFromMemory(pLoadFont, NULL, i, -1);
-                }
-            }
-        }
-        FontIndex = 0;
-    }
-
     if (CharSetIndex == -1)
     {
         INT i;
@@ -2051,6 +2003,57 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     }
 
     return FaceCount;   /* number of loaded faces */
+}
+
+static INT FASTCALL
+IntGdiLoadFontByIndexFromMemory(PGDI_LOAD_FONT pLoadFont, FT_Long FontIndex)
+{
+    FT_Error Error;
+    FT_Face Face;
+    FT_Long iFace, num_faces;
+    PSHARED_FACE SharedFace;
+    INT FaceCount = 0;
+
+    IntLockFreeType();
+
+    /* Load a face from memory */
+    Error = FT_New_Memory_Face(g_FreeTypeLibrary,
+                               pLoadFont->Memory->Buffer, pLoadFont->Memory->BufferSize,
+                               ((FontIndex == -1) ? 0 : FontIndex), &Face);
+    if (Error)
+    {
+        if (Error == FT_Err_Unknown_File_Format)
+            DPRINT1("Unknown font file format\n");
+        else
+            DPRINT1("Error reading font (error code: %d)\n", Error);
+        IntUnLockFreeType();
+        return 0; /* Failure */
+    }
+
+    pLoadFont->IsTrueType = FT_IS_SFNT(Face);
+    num_faces = Face->num_faces;
+    SharedFace = SharedFace_Create(Face, pLoadFont->Memory);
+
+    IntUnLockFreeType();
+
+    if (!SharedFace)
+    {
+        DPRINT1("SharedFace_Create failed\n");
+        EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return 0; /* Failure */
+    }
+
+    if (FontIndex == -1)
+    {
+        for (iFace = 1; iFace < num_faces; ++iFace)
+        {
+            FaceCount += IntGdiLoadFontByIndexFromMemory(pLoadFont, iFace);
+        }
+        FontIndex = 0;
+    }
+
+    FaceCount += IntGdiLoadFontsFromMemory(pLoadFont, SharedFace, FontIndex, -1);
+    return FaceCount;
 }
 
 static LPCWSTR FASTCALL
@@ -2179,14 +2182,13 @@ IntGdiAddFontResourceEx(PUNICODE_STRING FileName, DWORD Characteristics,
         return 0;
     }
 
+    RtlZeroMemory(&LoadFont, sizeof(LoadFont));
     LoadFont.pFileName          = &PathName;
     LoadFont.Memory             = SharedMem_Create(Buffer, ViewSize, TRUE);
     LoadFont.Characteristics    = Characteristics;
     RtlInitUnicodeString(&LoadFont.RegValueName, NULL);
-    LoadFont.IsTrueType         = FALSE;
     LoadFont.CharSet            = DEFAULT_CHARSET;
-    LoadFont.PrivateEntry       = NULL;
-    FontCount = IntGdiLoadFontsFromMemory(&LoadFont, NULL, -1, -1);
+    FontCount = IntGdiLoadFontByIndexFromMemory(&LoadFont, -1);
 
     /* Release our copy */
     IntLockFreeType();
@@ -2470,13 +2472,11 @@ IntGdiAddFontMemResource(PVOID Buffer, DWORD dwSize, PDWORD pNumAdded)
     }
     RtlCopyMemory(BufferCopy, Buffer, dwSize);
 
-    LoadFont.pFileName          = NULL;
+    RtlZeroMemory(&LoadFont, sizeof(LoadFont));
     LoadFont.Memory             = SharedMem_Create(BufferCopy, dwSize, FALSE);
     LoadFont.Characteristics    = FR_PRIVATE | FR_NOT_ENUM;
     RtlInitUnicodeString(&LoadFont.RegValueName, NULL);
-    LoadFont.IsTrueType         = FALSE;
-    LoadFont.PrivateEntry       = NULL;
-    FaceCount = IntGdiLoadFontsFromMemory(&LoadFont, NULL, -1, -1);
+    FaceCount = IntGdiLoadFontByIndexFromMemory(&LoadFont, -1);
 
     RtlFreeUnicodeString(&LoadFont.RegValueName);
 
@@ -3164,7 +3164,7 @@ IntGetOutlineTextMetrics(PFONTGDI FontGDI,
 
     Otm->otmSize = Cache->OutlineRequiredSize;
 
-    FillTM(&Otm->otmTextMetrics, FontGDI, pOS2, pHori, !Error ? &WinFNT : 0);
+    FillTM(&Otm->otmTextMetrics, FontGDI, pOS2, pHori, (Error ? NULL : &WinFNT));
 
     if (!pOS2)
         goto skip_os2;
@@ -3859,7 +3859,8 @@ IntGetBitmapGlyphWithCache(
 
     BitmapGlyph = (FT_BitmapGlyph)GlyphCopy;
     FT_Bitmap_New(&AlignedBitmap);
-    if(FT_Bitmap_Convert(GlyphSlot->library, &BitmapGlyph->bitmap, &AlignedBitmap, 4))
+    if (FT_Bitmap_Convert_ReactOS_Hack(GlyphSlot->library, &BitmapGlyph->bitmap,
+                                       &AlignedBitmap, 4, TRUE))
     {
         DPRINT1("Conversion failed\n");
         ExFreePoolWithTag(NewEntry, TAG_FONT);
@@ -5318,25 +5319,26 @@ ftGdiGetTextMetricsW(
             Status = STATUS_SUCCESS;
 
             IntLockFreeType();
+
+            Error = FT_Get_WinFNT_Header(Face, &Win);
             pOS2 = FT_Get_Sfnt_Table(Face, ft_sfnt_os2);
-            if (NULL == pOS2)
+            pHori = FT_Get_Sfnt_Table(Face, ft_sfnt_hhea);
+
+            if (!pOS2 && Error)
             {
                 DPRINT1("Can't find OS/2 table - not TT font?\n");
                 Status = STATUS_INTERNAL_ERROR;
             }
 
-            pHori = FT_Get_Sfnt_Table(Face, ft_sfnt_hhea);
-            if (NULL == pHori)
+            if (!pHori && Error)
             {
                 DPRINT1("Can't find HHEA table - not TT font?\n");
                 Status = STATUS_INTERNAL_ERROR;
             }
 
-            Error = FT_Get_WinFNT_Header(Face, &Win);
-
-            if (NT_SUCCESS(Status) || !Error)
+            if (NT_SUCCESS(Status))
             {
-                FillTM(&ptmwi->TextMetric, FontGDI, pOS2, pHori, !Error ? &Win : 0);
+                FillTM(&ptmwi->TextMetric, FontGDI, pOS2, pHori, (Error ? NULL : &Win));
 
                 /* FIXME: Fill Diff member */
             }
@@ -6796,7 +6798,9 @@ IntExtTextOutW(
     FT_Matrix mat;
     BOOL bNoTransform;
     DWORD ch0, ch1;
+    const DWORD del = 0x7f, nbsp = 0xa0; // DEL is ASCII DELETE and nbsp is a non-breaking space
     FONTLINK_CHAIN Chain;
+    SIZE spaceWidth;
 
     /* Check if String is valid */
     if (Count > 0xFFFF || (Count > 0 && String == NULL))
@@ -7062,6 +7066,23 @@ IntExtTextOutW(
         bitSize.cx = realglyph->bitmap.width;
         bitSize.cy = realglyph->bitmap.rows;
 
+        /* Do chars > space & not DEL & not nbsp have a bitSize.cx of zero? */
+        if (ch0 > L' ' && ch0 != del && ch0 != nbsp && bitSize.cx == 0)
+            DPRINT1("WARNING: WChar 0x%04x has a bitSize.cx of zero\n", ch0);
+
+        /* Don't ignore spaces or non-breaking spaces when computing offset.
+         * This completes the fix of CORE-11787. */
+        if ((pdcattr->flTextAlign & TA_UPDATECP) && bitSize.cx == 0 &&
+            (ch0 == L' ' || ch0 == nbsp)) // Space chars needing x-dim widths
+        { 
+            IntUnLockFreeType();
+            /* Get the width of the space character */
+            TextIntGetTextExtentPoint(dc, TextObj, L" ", 1, 0, NULL, 0, &spaceWidth, 0);
+            IntLockFreeType();
+            bitSize.cx = spaceWidth.cx;
+            realglyph->left = 0;
+        }
+
         MaskRect.right = realglyph->bitmap.width;
         MaskRect.bottom = realglyph->bitmap.rows;
 
@@ -7166,8 +7187,8 @@ IntExtTextOutW(
 
         previous = glyph_index;
     }
-
-    if (pdcattr->flTextAlign & TA_UPDATECP)
+    /* Don't update position if String == NULL. Fixes CORE-19721. */
+    if ((pdcattr->flTextAlign & TA_UPDATECP) && String)
         pdcattr->ptlCurrent.x = DestRect.right - dc->ptlDCOrig.x;
 
     if (plf->lfUnderline || plf->lfStrikeOut) /* Underline or strike-out? */
