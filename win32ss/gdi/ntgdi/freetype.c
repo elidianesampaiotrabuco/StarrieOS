@@ -34,6 +34,7 @@
 
 #define NDEBUG
 #include <debug.h>
+// DBG_DEFAULT_CHANNEL(GdiFont); // TODO: Re-enable when using TRACE/ERR...
 
 typedef struct _FONTLINK
 {
@@ -1751,7 +1752,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     {
         SharedFace_Release(SharedFace);
         EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
-        return 0;   /* failure */
+        return 0; /* failure */
     }
 
     /* allocate a FONTGDI */
@@ -1761,7 +1762,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
         SharedFace_Release(SharedFace);
         ExFreePoolWithTag(Entry, TAG_FONT);
         EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
-        return 0;   /* failure */
+        return 0; /* failure */
     }
 
     /* set file name */
@@ -1776,7 +1777,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
             SharedFace_Release(SharedFace);
             ExFreePoolWithTag(Entry, TAG_FONT);
             EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
-            return 0;   /* failure */
+            return 0; /* failure */
         }
 
         RtlCopyMemory(FontGDI->Filename, pFileName->Buffer, pFileName->Length);
@@ -1794,7 +1795,8 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
             EngFreeMem(FontGDI);
             SharedFace_Release(SharedFace);
             ExFreePoolWithTag(Entry, TAG_FONT);
-            return 0;
+            EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
+            return 0; /* failure */
         }
 
         PrivateEntry->Entry = Entry;
@@ -1997,12 +1999,12 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
 
         for (i = 1; i < CharSetCount; ++i)
         {
-            /* Do not count charsets towards 'faces' loaded */
+            /* Do not count charsets as loaded 'faces' */
             IntGdiLoadFontsFromMemory(pLoadFont, SharedFace, FontIndex, i);
         }
     }
 
-    return FaceCount;   /* number of loaded faces */
+    return FaceCount; /* Number of loaded faces */
 }
 
 static INT FASTCALL
@@ -3470,11 +3472,11 @@ FontFamilyFillInfo(PFONTFAMILYINFO Info, LPCWSTR FaceName,
     RtlZeroMemory(Info, sizeof(FONTFAMILYINFO));
     ASSERT_FREETYPE_LOCK_HELD();
     Size = IntGetOutlineTextMetrics(FontGDI, 0, NULL, TRUE);
+    if (!Size)
+        return;
     Otm = ExAllocatePoolWithTag(PagedPool, Size, GDITAG_TEXT);
     if (!Otm)
-    {
         return;
-    }
     ASSERT_FREETYPE_LOCK_HELD();
     Size = IntGetOutlineTextMetrics(FontGDI, Size, Otm, TRUE);
     if (!Size)
@@ -4494,20 +4496,26 @@ ftGdiGetGlyphOutline(
 
     ASSERT_FREETYPE_LOCK_NOT_HELD();
     Size = IntGetOutlineTextMetrics(FontGDI, 0, NULL, FALSE);
+    if (!Size)
+    {
+        TEXTOBJ_UnlockText(TextObj);
+        EngSetLastError(ERROR_GEN_FAILURE);
+        return GDI_ERROR;
+    }
     potm = ExAllocatePoolWithTag(PagedPool, Size, GDITAG_TEXT);
     if (!potm)
     {
-        EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
         TEXTOBJ_UnlockText(TextObj);
+        EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
         return GDI_ERROR;
     }
     ASSERT_FREETYPE_LOCK_NOT_HELD();
     Size = IntGetOutlineTextMetrics(FontGDI, Size, potm, FALSE);
     if (!Size)
     {
-        /* FIXME: last error? */
         ExFreePoolWithTag(potm, GDITAG_TEXT);
         TEXTOBJ_UnlockText(TextObj);
+        EngSetLastError(ERROR_GEN_FAILURE);
         return GDI_ERROR;
     }
 
@@ -5283,7 +5291,7 @@ ftGdiGetTextMetricsW(
 
     if (!ptmwi)
     {
-        EngSetLastError(STATUS_INVALID_PARAMETER);
+        EngSetLastError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RtlZeroMemory(ptmwi, sizeof(TMW_INTERNAL));
@@ -5937,9 +5945,10 @@ TextIntRealizeFont(HFONT FontHandle, PTEXTOBJ pTextObj)
 
     /* substitute */
     SubstitutedLogFont = *pLogFont;
-    DPRINT("Font '%S,%u' is substituted by: ", pLogFont->lfFaceName, pLogFont->lfCharSet);
     SubstituteFontRecurse(&SubstitutedLogFont);
-    DPRINT("'%S,%u'.\n", SubstitutedLogFont.lfFaceName, SubstitutedLogFont.lfCharSet);
+    DPRINT("Font '%S,%u' is substituted by '%S,%u'.\n",
+           pLogFont->lfFaceName, pLogFont->lfCharSet,
+           SubstitutedLogFont.lfFaceName, SubstitutedLogFont.lfCharSet);
 
     MatchPenalty = 0xFFFFFFFF;
     TextObj->Font = NULL;
@@ -7526,7 +7535,7 @@ NtGdiGetCharABCWidthsW(
         if(Safepwch)
             ExFreePoolWithTag(Safepwch , GDITAG_TEXT);
 
-        EngSetLastError(Status);
+        SetLastNtError(Status);
         return FALSE;
     }
 
@@ -7719,7 +7728,7 @@ NtGdiGetCharWidthW(
 
     if (!NT_SUCCESS(Status))
     {
-        EngSetLastError(Status);
+        SetLastNtError(Status);
         return FALSE;
     }
 
