@@ -3233,7 +3233,7 @@ skip_os2:
     return Cache->OutlineRequiredSize;
 }
 
-/* See https://msdn.microsoft.com/en-us/library/bb165625(v=vs.90).aspx */
+/* See https://learn.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2008/bb165625(v=vs.90) */
 static BYTE
 CharSetFromLangID(LANGID LangID)
 {
@@ -4095,7 +4095,7 @@ IntRequestFontSize(PDC dc, PFONTGDI FontGDI, LONG lfWidth, LONG lfHeight)
     TT_OS2 *pOS2;
     TT_HoriHeader *pHori;
     FT_WinFNT_HeaderRec WinFNT;
-    LONG Ascent, Descent, Sum, EmHeight, Width64;
+    LONG Ascent, Descent, Sum, EmHeight;
 
     lfWidth = abs(lfWidth);
     if (lfHeight == 0)
@@ -4147,12 +4147,12 @@ IntRequestFontSize(PDC dc, PFONTGDI FontGDI, LONG lfWidth, LONG lfHeight)
 
     /*
      * NOTE: We cast TT_OS2.usWinAscent and TT_OS2.usWinDescent to signed FT_Short.
-     * Why? See: https://docs.microsoft.com/en-us/typography/opentype/spec/os2#uswindescent
+     * Why? See: https://learn.microsoft.com/en-us/typography/opentype/spec/os2#uswindescent
      *
      * > usWinDescent is "usually" a positive value ...
      *
      * We can read it as "not always". See CORE-14994.
-     * See also: https://docs.microsoft.com/en-us/typography/opentype/spec/os2#fsselection
+     * See also: https://learn.microsoft.com/en-us/typography/opentype/spec/os2#fsselection
      */
 #define FM_SEL_USE_TYPO_METRICS 0x80
     if (lfHeight > 0)
@@ -4205,20 +4205,21 @@ IntRequestFontSize(PDC dc, PFONTGDI FontGDI, LONG lfWidth, LONG lfHeight)
 #if 1
     /* I think this is wrong implementation but its test result is better. */
     if (lfWidth != 0)
-        Width64 = FT_MulDiv(lfWidth, face->units_per_EM, pOS2->xAvgCharWidth) << 6;
-    else
-        Width64 = 0;
+        req.width = FT_MulDiv(lfWidth, face->units_per_EM, pOS2->xAvgCharWidth) << 6;
 #else
     /* I think this is correct implementation but it is mismatching to the
        other metric functions. The test result is bad. */
     if (lfWidth != 0)
-        Width64 = (FT_MulDiv(lfWidth, 96 * 5, 72 * 3) << 6); /* ??? FIXME */
-    else
-        Width64 = 0;
+        req.width = (FT_MulDiv(lfWidth, 96 * 5, 72 * 3) << 6); /* ??? FIXME */
 #endif
+    else
+        req.width = 0;
+
+    /* HACK: We do not handle small widths well, so just use zero for these. See CORE-19870. */
+    if (lfWidth < 10)
+        req.width = 0;
 
     req.type           = FT_SIZE_REQUEST_TYPE_NOMINAL;
-    req.width          = Width64;
     req.height         = (EmHeight << 6);
     req.horiResolution = 0;
     req.vertResolution = 0;
@@ -5411,7 +5412,7 @@ ftGdiGetFontData(
 
 #define GOT_PENALTY(name, value) Penalty += (value)
 
-// NOTE: See Table 1. of https://msdn.microsoft.com/en-us/library/ms969909.aspx
+// NOTE: See Table 1. of https://learn.microsoft.com/en-us/previous-versions/ms969909(v=msdn.10)
 static UINT
 GetFontPenalty(const LOGFONTW *               LogFont,
                const OUTLINETEXTMETRICW *     Otm,

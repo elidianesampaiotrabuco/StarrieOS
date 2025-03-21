@@ -34,6 +34,7 @@ extern void func_SHChangeNotify(void);
 extern void func_SHCreateDataObject(void);
 extern void func_SHCreateFileDataObject(void);
 extern void func_SHCreateFileExtractIconW(void);
+extern void func_SHDefExtractIcon(void);
 extern void func_SHEnumerateUnreadMailAccountsW(void);
 extern void func_She(void);
 extern void func_ShellExec_RunDLL(void);
@@ -43,6 +44,7 @@ extern void func_ShellExecuteW(void);
 extern void func_ShellHook(void);
 extern void func_ShellState(void);
 extern void func_SHGetAttributesFromDataObject(void);
+extern void func_SHGetComputerDisplayNameW(void);
 extern void func_SHGetFileInfo(void);
 extern void func_SHGetUnreadMailCountW(void);
 extern void func_SHGetUserDisplayName(void);
@@ -88,6 +90,7 @@ const struct test winetest_testlist[] =
     { "SHCreateDataObject", func_SHCreateDataObject },
     { "SHCreateFileDataObject", func_SHCreateFileDataObject },
     { "SHCreateFileExtractIconW", func_SHCreateFileExtractIconW },
+    { "SHDefExtractIcon", func_SHDefExtractIcon },
     { "SHEnumerateUnreadMailAccountsW", func_SHEnumerateUnreadMailAccountsW },
     { "She", func_She },
     { "ShellExec_RunDLL", func_ShellExec_RunDLL },
@@ -97,6 +100,7 @@ const struct test winetest_testlist[] =
     { "ShellHook", func_ShellHook },
     { "ShellState", func_ShellState },
     { "SHGetAttributesFromDataObject", func_SHGetAttributesFromDataObject },
+    { "SHGetComputerDisplayNameW", func_SHGetComputerDisplayNameW },
     { "SHGetFileInfo", func_SHGetFileInfo },
     { "SHGetUnreadMailCountW", func_SHGetUnreadMailCountW },
     { "SHGetUserDisplayName", func_SHGetUserDisplayName },

@@ -307,6 +307,7 @@
 307 stdcall SHGetFolderPathW(long long long long ptr)
 308 stdcall SHGetIconOverlayIndexA(str long)
 309 stdcall SHGetIconOverlayIndexW(wstr long)
+@ stdcall -version=0x600+ SHGetIDListFromObject(ptr ptr)
 310 stdcall SHGetInstanceExplorer(long)
 311 stdcall SHGetMalloc(ptr)
 312 stdcall SHGetNewLinkInfo(str str ptr long long) SHGetNewLinkInfoA
@@ -460,7 +461,7 @@
 749 stdcall -noname -version=0x501-0x502 SHGetShellStyleHInstance()
 750 stdcall -noname SHGetAttributesFromDataObject(ptr long ptr ptr)
 751 stub -noname SHSimulateDropOnClsid
-752 stdcall -noname SHGetComputerDisplayNameW(long long long long)
+752 stdcall -noname SHGetComputerDisplayNameW(wstr long ptr long)
 753 stdcall -noname CheckStagingArea()
 754 stub -noname SHLimitInputEditWithFlags
 755 stdcall -noname PathIsEqualOrSubFolder(wstr wstr)

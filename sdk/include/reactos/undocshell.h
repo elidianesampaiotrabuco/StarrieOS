@@ -928,7 +928,6 @@ BOOL WINAPI SHSettingsChanged(LPCVOID unused, LPCWSTR pszKey);
 #define TABDMC_LOADINPROC 2
 
 void WINAPI ShellDDEInit(BOOL bInit);
-DWORD WINAPI WinList_Init(void);
 
 IStream* WINAPI SHGetViewStream(LPCITEMIDLIST, DWORD, LPCTSTR, LPCTSTR, LPCTSTR);
 
@@ -965,6 +964,17 @@ CopyStreamUI(
     _Out_ IStream *pDst,
     _Inout_opt_ IProgressDialog *pProgress,
     _In_opt_ DWORDLONG dwlSize);
+
+// Flags for SHGetComputerDisplayNameW
+#define SHGCDN_NOCACHE 0x1
+#define SHGCDN_NOSERVERNAME 0x10000
+
+HRESULT WINAPI
+SHGetComputerDisplayNameW(
+    _In_opt_ LPWSTR pszServerName,
+    _In_ DWORD dwFlags,
+    _Out_writes_z_(cchNameMax) LPWSTR pszName,
+    _In_ DWORD cchNameMax);
 
 /*****************************************************************************
  * INVALID_FILETITLE_CHARACTERS
