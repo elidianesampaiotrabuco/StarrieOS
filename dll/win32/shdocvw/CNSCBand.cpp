@@ -45,33 +45,6 @@ SHDOCVW_GetPathOfShortcut(
     return S_OK;
 }
 
-HRESULT
-SHDOCVW_CreateShortcut(
-    _In_ LPCWSTR pszLnkFileName, 
-    _In_ PCIDLIST_ABSOLUTE pidlTarget,
-    _In_opt_ LPCWSTR pszDescription)
-{
-    HRESULT hr;
-
-    CComPtr<IShellLink> psl;
-    hr = CoCreateInstance(CLSID_ShellLink, NULL,  CLSCTX_INPROC_SERVER,
-                          IID_PPV_ARG(IShellLink, &psl));
-    if (FAILED_UNEXPECTEDLY(hr))
-        return hr;
-
-    psl->SetIDList(pidlTarget);
-
-    if (pszDescription)
-        psl->SetDescription(pszDescription);
-
-    CComPtr<IPersistFile> ppf;
-    hr = psl->QueryInterface(IID_PPV_ARG(IPersistFile, &ppf));
-    if (FAILED_UNEXPECTEDLY(hr))
-        return hr;
-
-    return ppf->Save(pszLnkFileName, TRUE);
-}
-
 CNSCBand::CNSCBand()
 {
     SHDOCVW_LockModule();
@@ -87,6 +60,7 @@ CNSCBand::~CNSCBand()
         ImageList_Destroy(m_hToolbarImageList);
         m_hToolbarImageList = NULL;
     }
+    SHFree(m_OriginalRename);
     SHDOCVW_UnlockModule();
 }
 
@@ -132,16 +106,21 @@ SFGAOF CNSCBand::_GetAttributesOfItem(_In_ CItemData *pData, _In_ SFGAOF Query)
     return Attributes & Query;
 }
 
-HRESULT CNSCBand::_GetNameOfItem(IShellFolder *pSF, PCUITEMID_CHILD pidl, PWSTR Name)
+HRESULT CNSCBand::_GetNameOfItem(IShellFolder *pSF, PCUITEMID_CHILD pidl, UINT Flags, PWSTR Name)
 {
     STRRET strret;
-    HRESULT hr = pSF->GetDisplayNameOf(pidl, SHGDN_INFOLDER, &strret);
+    HRESULT hr = pSF->GetDisplayNameOf(pidl, Flags, &strret);
     if (FAILED_UNEXPECTEDLY(hr))
         return hr;
     hr = StrRetToBufW(&strret, pidl, Name, MAX_PATH);
     if (FAILED_UNEXPECTEDLY(hr))
         return hr;
     return hr;
+}
+
+HRESULT CNSCBand::_GetNameOfItem(IShellFolder *pSF, PCUITEMID_CHILD pidl, PWSTR Name)
+{
+    return _GetNameOfItem(pSF, pidl, SHGDN_NORMAL | SHGDN_INFOLDER, Name);
 }
 
 static HRESULT
@@ -642,31 +621,23 @@ HRESULT CNSCBand::_AddFavorite()
     CComHeapPtr<ITEMIDLIST> pidlCurrent;
     _GetCurrentLocation(&pidlCurrent);
 
-    WCHAR szCurDir[MAX_PATH];
-    if (!ILGetDisplayName(pidlCurrent, szCurDir))
-    {
-        FIXME("\n");
-        return E_FAIL;
-    }
+    CComPtr<IShellFolder> pParent;
+    LPCITEMIDLIST pidlLast;
+    HRESULT hr = SHBindToParent(pidlCurrent, IID_PPV_ARG(IShellFolder, &pParent), &pidlLast);
+    if (FAILED_UNEXPECTEDLY(hr))
+        return hr;
 
-    WCHAR szPath[MAX_PATH], szSuffix[32];
-    SHGetSpecialFolderPathW(m_hWnd, szPath, CSIDL_FAVORITES, TRUE);
-    PathAppendW(szPath, PathFindFileNameW(szCurDir));
+    STRRET strret;
+    hr = pParent->GetDisplayNameOf(pidlLast, SHGDN_FORPARSING, &strret);
+    if (FAILED_UNEXPECTEDLY(hr))
+        return hr;
 
-    const INT ich = lstrlenW(szPath);
-    for (INT iTry = 2; iTry <= 9999; ++iTry)
-    {
-        PathAddExtensionW(szPath, L".lnk");
-        if (!PathFileExistsW(szPath))
-            break;
-        szPath[ich] = UNICODE_NULL;
-        wsprintfW(szSuffix, L" (%d)", iTry);
-        lstrcatW(szPath, szSuffix);
-    }
+    CComHeapPtr<WCHAR> pszURL;
+    hr = StrRetToStrW(&strret, NULL, &pszURL);
+    if (FAILED_UNEXPECTEDLY(hr))
+        return hr;
 
-    TRACE("%S, %S\n", szCurDir, szPath);
-
-    return SHDOCVW_CreateShortcut(szPath, pidlCurrent, NULL);
+    return AddUrlToFavorites(m_hWnd, pszURL, NULL, TRUE);
 }
 
 LRESULT CNSCBand::OnCommand(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
@@ -798,23 +769,31 @@ LRESULT CNSCBand::OnBeginLabelEdit(_In_ LPNMTVDISPINFO dispInfo)
     CComPtr<IShellFolder> pParent;
     LPCITEMIDLIST pChild;
     HRESULT hr;
+    HWND hWndEdit = TreeView_GetEditControl(dispInfo->hdr.hwndFrom);
 
+    SHFree(m_OriginalRename);
+    m_OriginalRename = NULL;
     CItemData *info = _GetItemData(dispInfo->item.hItem);
-    if (!info)
-        return FALSE;
+    if (!info || !hWndEdit)
+        return TRUE;
 
     hr = SHBindToParent(info->absolutePidl, IID_PPV_ARG(IShellFolder, &pParent), &pChild);
     if (FAILED_UNEXPECTEDLY(hr))
-        return FALSE;
+        return TRUE;
 
     hr = pParent->GetAttributesOf(1, &pChild, &dwAttr);
     if (SUCCEEDED(hr) && (dwAttr & SFGAO_CANRENAME))
     {
+        WCHAR szName[MAX_PATH];
+        if (SUCCEEDED(_GetNameOfItem(pParent, pChild, SHGDN_FOREDITING | SHGDN_INFOLDER, szName)))
+        {
+            ::SetWindowTextW(hWndEdit, szName);
+            SHStrDupW(szName, &m_OriginalRename);
+        }
         m_isEditing = TRUE;
         m_oldSelected = NULL;
         return FALSE;
     }
-
     return TRUE;
 }
 
@@ -860,6 +839,15 @@ LRESULT CNSCBand::OnEndLabelEdit(_In_ LPNMTVDISPINFO dispInfo)
 
     if (!dispInfo->item.pszText)
         return FALSE;
+
+    if (m_OriginalRename)
+    {
+        BOOL same = !lstrcmpW(m_OriginalRename, dispInfo->item.pszText); // Case-sensitive
+        SHFree(m_OriginalRename);
+        m_OriginalRename = NULL;
+        if (same)
+            return FALSE;
+    }
 
     CComPtr<IShellFolder> pParent;
     LPCITEMIDLIST pidlChild;
@@ -1297,7 +1285,8 @@ STDMETHODIMP CNSCBand::HasFocusIO()
 
 STDMETHODIMP CNSCBand::TranslateAcceleratorIO(LPMSG lpMsg)
 {
-    if (lpMsg->message == WM_KEYDOWN && lpMsg->wParam == VK_F2 && !m_isEditing)
+    BOOL SkipAccelerators = m_isEditing || (!IsChild(lpMsg->hwnd) && lpMsg->hwnd != m_hWnd);
+    if (lpMsg->message == WM_KEYDOWN && lpMsg->wParam == VK_F2 && !SkipAccelerators)
     {
         if (HTREEITEM hItem = m_hwndTreeView.GetNextItem(NULL, TVGN_CARET))
         {
@@ -1310,7 +1299,7 @@ STDMETHODIMP CNSCBand::TranslateAcceleratorIO(LPMSG lpMsg)
         }
     }
 
-    if (lpMsg->message == WM_SYSKEYDOWN && lpMsg->wParam == VK_RETURN && !m_isEditing)
+    if (lpMsg->message == WM_SYSKEYDOWN && lpMsg->wParam == VK_RETURN && !SkipAccelerators)
     {
         CItemData *pItem = _GetItemData(TVGN_CARET);
         if (pItem && _GetAttributesOfItem(pItem, SFGAO_HASPROPSHEET))
