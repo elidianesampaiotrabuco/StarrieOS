@@ -54,6 +54,12 @@ static const CLSID* IsRegItem(PCUITEMID_CHILD pidl)
     return NULL;
 }
 
+static bool IsRegItem(PCUITEMID_CHILD pidl, REFCLSID clsid)
+{
+    const CLSID *pClass = IsRegItem(pidl);
+    return pClass && *pClass == clsid;
+}
+
 static inline void MarkAsCommonItem(LPITEMIDLIST pidl)
 {
     ASSERT(_ILGetFSType(pidl) & PT_FS);
@@ -305,9 +311,9 @@ HRESULT CDesktopFolder::_GetSFFromPidl(LPCITEMIDLIST pidl, IShellFolder2** psf)
     {
         FIXME("Desktop is unexpected here!\n");
     }
-    else
+    else if (_ILIsSpecialFolder(pidl))
     {
-        ASSERT(!_ILIsSpecialFolder(pidl));
+        FIXME("Unexpected PIDL type %#x\n", pidl->mkid.abID[0]);
     }
 #endif
     IShellFolder *pSF = IsCommonItem(pidl) ? m_SharedDesktopFSFolder : m_DesktopFSFolder;
@@ -708,12 +714,12 @@ HRESULT WINAPI CDesktopFolder::GetAttributesOf(
         /* TODO: always add SFGAO_CANLINK */
         for (UINT i = 0; i < cidl; ++i)
         {
-            pdump(*apidl);
-            if (_ILIsDesktop(*apidl))
+            pdump(apidl[i]);
+            if (_ILIsDesktop(apidl[i]))
                 *rgfInOut &= dwDesktopAttributes;
             else if (_ILIsMyComputer(apidl[i]))
                 *rgfInOut &= dwMyComputerAttributes;
-            else if (_ILIsNetHood(apidl[i]))
+            else if (IsRegItem(apidl[i], CLSID_NetworkPlaces))
                 *rgfInOut &= dwMyNetPlacesAttributes;
             else if (_ILIsFolderOrFile(apidl[i]) || _ILIsSpecialFolder(apidl[i]))
             {

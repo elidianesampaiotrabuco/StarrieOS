@@ -7,6 +7,14 @@
 
 #pragma once
 
+#ifndef OPTIONAL_
+    #ifdef __cplusplus
+        #define OPTIONAL_(arg) = arg
+    #else
+        #define OPTIONAL_(arg)
+    #endif
+#endif
+
 #ifdef __cplusplus
 static inline LPWSTR
 SHStrDupW(LPCWSTR Src)
@@ -23,6 +31,13 @@ SHELL_ErrorBox(CMINVOKECOMMANDINFO &cmi, UINT Error)
     return SHELL_ErrorBox(cmi.hwnd, Error);
 }
 #endif
+
+static inline BOOL
+IsEqualPersistClassID(IPersist *pPersist, REFCLSID clsid)
+{
+    CLSID temp;
+    return pPersist && SUCCEEDED(pPersist->GetClassID(&temp)) && IsEqualCLSID(clsid, temp);
+}
 
 static inline BOOL
 RegValueExists(HKEY hKey, LPCWSTR Name)
@@ -43,15 +58,15 @@ inline DWORD
 RegSetOrDelete(HKEY hKey, LPCWSTR Name, DWORD Type, LPCVOID Data, DWORD Size)
 {
     if (Data)
-        return RegSetValueExW(hKey, Name, 0, Type, LPBYTE(Data), Size);
+        return RegSetValueExW(hKey, Name, 0, Type, (LPBYTE)Data, Size);
     else
         return RegDeleteValueW(hKey, Name);
 }
 
 static inline DWORD
-RegSetString(HKEY hKey, LPCWSTR Name, LPCWSTR Str, DWORD Type = REG_SZ)
+RegSetString(HKEY hKey, LPCWSTR Name, LPCWSTR Str, DWORD Type OPTIONAL_(REG_SZ))
 {
-    return RegSetValueExW(hKey, Name, 0, Type, LPBYTE(Str), (lstrlenW(Str) + 1) * sizeof(WCHAR));
+    return RegSetValueExW(hKey, Name, 0, Type, (LPBYTE)Str, (lstrlenW(Str) + 1) * sizeof(WCHAR));
 }
 
 typedef struct
