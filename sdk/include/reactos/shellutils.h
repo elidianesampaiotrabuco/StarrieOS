@@ -474,6 +474,13 @@ template<class B, class R> static HRESULT SHILCombine(B base, PCUIDLIST_RELATIVE
 static inline bool StrIsNullOrEmpty(LPCSTR str) { return !str || !*str; }
 static inline bool StrIsNullOrEmpty(LPCWSTR str) { return !str || !*str; }
 
+HRESULT inline SHSetStrRetEmpty(LPSTRRET pStrRet)
+{
+    pStrRet->uType = STRRET_CSTR;
+    pStrRet->cStr[0] = '\0';
+    return S_OK;
+}
+
 HRESULT inline SHSetStrRet(LPSTRRET pStrRet, LPCSTR pstrValue)
 {
     pStrRet->uType = STRRET_CSTR;
@@ -627,6 +634,12 @@ typedef CCoInitBase<OleInitialize, OleUninitialize> COleInit;
                                     SEE_MASK_FLAG_LOG_USAGE | SEE_MASK_NOZONECHECKS)
 #define SEE_CMIC_COMMON_FLAGS      (SEE_CMIC_COMMON_BASICFLAGS | SEE_MASK_HOTKEY | SEE_MASK_ICON | \
                                     SEE_MASK_HASLINKNAME | SEE_MASK_HASTITLE)
+
+static inline BOOL SHELL_IsContextMenuMsg(UINT uMsg)
+{
+    return uMsg == WM_MEASUREITEM || uMsg == WM_DRAWITEM ||
+           uMsg == WM_INITMENUPOPUP || uMsg == WM_MENUSELECT || uMsg == WM_MENUCHAR;
+}
 
 static inline BOOL ILIsSingle(LPCITEMIDLIST pidl)
 {

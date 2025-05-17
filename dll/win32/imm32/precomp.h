@@ -45,7 +45,35 @@
 #include <strsafe.h>
 
 #include <wine/debug.h>
-#include <wine/list.h>
+
+/* #define UNEXPECTED() (ASSERT(FALSE), TRUE) */
+#define UNEXPECTED() TRUE
+
+#define ERR_PRINTF(fmt, ...) (__WINE_IS_DEBUG_ON(_ERR, __wine_dbch___default) ? \
+    (wine_dbg_printf(fmt, ##__VA_ARGS__), UNEXPECTED()) : UNEXPECTED())
+
+/* Unexpected Condition Checkers */
+#if DBG
+    #define FAILED_UNEXPECTEDLY(hr) \
+        (FAILED(hr) ? ERR_PRINTF("FAILED(0x%08X)\n", hr) : FALSE)
+    #define IS_NULL_UNEXPECTEDLY(p) \
+        (!(p) ? ERR_PRINTF("%s was NULL\n", #p) : FALSE)
+    #define IS_ZERO_UNEXPECTEDLY(p) \
+        (!(p) ? ERR_PRINTF("%s was zero\n", #p) : FALSE)
+    #define IS_TRUE_UNEXPECTEDLY(x) \
+        ((x) ? ERR_PRINTF("%s was non-zero\n", #x) : FALSE)
+    #define IS_ERROR_UNEXPECTEDLY(x) \
+        ((x) != ERROR_SUCCESS ? ERR_PRINTF("%s was %d\n", #x, (int)(x)) : FALSE)
+#else
+    #define FAILED_UNEXPECTEDLY(hr) FAILED(hr)
+    #define IS_NULL_UNEXPECTEDLY(p) (!(p))
+    #define IS_ZERO_UNEXPECTEDLY(p) (!(p))
+    #define IS_TRUE_UNEXPECTEDLY(x) (x)
+    #define IS_ERROR_UNEXPECTEDLY(x) ((x) != ERROR_SUCCESS)
+#endif
+
+#define IS_CROSS_THREAD_HIMC(hIMC)   IS_TRUE_UNEXPECTEDLY(Imm32IsCrossThreadAccess(hIMC))
+#define IS_CROSS_PROCESS_HWND(hWnd)  IS_TRUE_UNEXPECTEDLY(Imm32IsCrossProcessAccess(hWnd))
 
 #define IMM_INIT_MAGIC          0x19650412
 #define IMM_INVALID_CANDFORM    ULONG_MAX
@@ -85,7 +113,7 @@ LPVOID FASTCALL ValidateHandle(HANDLE hObject, UINT uType);
 #define ValidateHwnd(hwnd) ValidateHandle((hwnd), TYPE_WINDOW)
 BOOL APIENTRY Imm32CheckImcProcess(PIMC pIMC);
 
-LPVOID APIENTRY ImmLocalAlloc(DWORD dwFlags, DWORD dwBytes);
+LPVOID ImmLocalAlloc(_In_ DWORD dwFlags, _In_ DWORD dwBytes);
 #define ImmLocalFree(lpData) HeapFree(ghImmHeap, 0, (lpData))
 
 LPWSTR APIENTRY Imm32WideFromAnsi(UINT uCodePage, LPCSTR pszA);
@@ -100,53 +128,6 @@ BOOL APIENTRY Imm32IsCrossThreadAccess(HIMC hIMC);
 BOOL APIENTRY Imm32IsCrossProcessAccess(HWND hWnd);
 BOOL WINAPI Imm32IsImcAnsi(HIMC hIMC);
 
-#if 0
-    #define UNEXPECTED() ASSERT(FALSE)
-#else
-    #define UNEXPECTED() 0
-#endif
-
-/*
- * Unexpected Condition Checkers
- * --- Examine the condition, and then generate trace log if necessary.
- */
-#ifdef NDEBUG /* on Release */
-#define FAILED_UNEXPECTEDLY(hr) (FAILED(hr))
-#define IS_NULL_UNEXPECTEDLY(p) (!(p))
-#define IS_ZERO_UNEXPECTEDLY(p) (!(p))
-#define IS_TRUE_UNEXPECTEDLY(x) (x)
-#define IS_FALSE_UNEXPECTEDLY(x) (!(x))
-#define IS_ERROR_UNEXPECTEDLY(x) (!(x))
-#else /* on Debug */
-#define FAILED_UNEXPECTEDLY(hr) \
-    (FAILED(hr) ? (ros_dbg_log(__WINE_DBCL_ERR, __wine_dbch___default, \
-                   __FILE__, __FUNCTION__, __LINE__, "FAILED(%s)\n", #hr), UNEXPECTED(), TRUE) \
-                : FALSE)
-#define IS_NULL_UNEXPECTEDLY(p) \
-    (!(p) ? (ros_dbg_log(__WINE_DBCL_ERR, __wine_dbch___default, \
-                         __FILE__, __FUNCTION__, __LINE__, "%s was NULL\n", #p), UNEXPECTED(), TRUE) \
-          : FALSE)
-#define IS_ZERO_UNEXPECTEDLY(p) \
-    (!(p) ? (ros_dbg_log(__WINE_DBCL_ERR, __wine_dbch___default, \
-                         __FILE__, __FUNCTION__, __LINE__, "%s was zero\n", #p), UNEXPECTED(), TRUE) \
-          : FALSE)
-#define IS_TRUE_UNEXPECTEDLY(x) \
-    ((x) ? (ros_dbg_log(__WINE_DBCL_ERR, __wine_dbch___default, \
-                        __FILE__, __FUNCTION__, __LINE__, "%s was non-zero\n", #x), UNEXPECTED(), TRUE) \
-         : FALSE)
-#define IS_FALSE_UNEXPECTEDLY(x) \
-    ((!(x)) ? (ros_dbg_log(__WINE_DBCL_ERR, __wine_dbch___default, \
-                           __FILE__, __FUNCTION__, __LINE__, "%s was FALSE\n", #x), UNEXPECTED(), TRUE) \
-            : FALSE)
-#define IS_ERROR_UNEXPECTEDLY(x) \
-    ((x) != ERROR_SUCCESS ? (ros_dbg_log(__WINE_DBCL_ERR, __wine_dbch___default, \
-                                          __FILE__, __FUNCTION__, __LINE__, \
-                                          "%s was 0x%X\n", #x, (x)), TRUE) \
-                          : FALSE)
-#endif
-
-#define IS_CROSS_THREAD_HIMC(hIMC)     IS_TRUE_UNEXPECTEDLY(Imm32IsCrossThreadAccess(hIMC))
-#define IS_CROSS_PROCESS_HWND(hWnd)    IS_TRUE_UNEXPECTEDLY(Imm32IsCrossProcessAccess(hWnd))
 #define ImeDpi_IsUnicode(pImeDpi)      ((pImeDpi)->ImeInfo.fdwProperty & IME_PROP_UNICODE)
 
 DWORD APIENTRY
@@ -161,13 +142,6 @@ Imm32MakeIMENotify(HIMC hIMC, HWND hwnd, DWORD dwAction, DWORD_PTR dwIndex, DWOR
                    DWORD_PTR dwCommand, DWORD_PTR dwData);
 
 DWORD APIENTRY Imm32BuildHimcList(DWORD dwThreadId, HIMC **pphList);
-
-INT APIENTRY
-Imm32ImeMenuAnsiToWide(const IMEMENUITEMINFOA *pItemA, LPIMEMENUITEMINFOW pItemW,
-                       UINT uCodePage, BOOL bBitmap);
-INT APIENTRY
-Imm32ImeMenuWideToAnsi(const IMEMENUITEMINFOW *pItemW, LPIMEMENUITEMINFOA pItemA,
-                       UINT uCodePage);
 
 PIME_STATE APIENTRY Imm32FetchImeState(LPINPUTCONTEXTDX pIC, HKL hKL);
 PIME_SUBSTATE APIENTRY Imm32FetchImeSubState(PIME_STATE pState, HKL hKL);

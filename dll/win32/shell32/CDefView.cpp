@@ -141,15 +141,15 @@ struct MenuCleanup
     }
     ~MenuCleanup()
     {
-        if (m_hMenu)
-        {
-            DestroyMenu(m_hMenu);
-            m_hMenu = NULL;
-        }
         if (m_pCM)
         {
             IUnknown_SetSite(m_pCM, NULL);
             m_pCM.Release();
+        }
+        if (m_hMenu)
+        {
+            DestroyMenu(m_hMenu);
+            m_hMenu = NULL;
         }
     }
 };
@@ -497,7 +497,7 @@ public:
     LRESULT OnNotify(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
     LRESULT OnChangeNotify(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
     LRESULT OnUpdateStatusbar(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
-    LRESULT OnCustomItem(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
+    LRESULT OnMenuMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
     LRESULT OnSettingChange(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
     LRESULT OnInitMenuPopup(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
     LRESULT OnChangeCBChain(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
@@ -548,8 +548,8 @@ public:
     MESSAGE_HANDLER(SHV_CHANGE_NOTIFY, OnChangeNotify)
     MESSAGE_HANDLER(SHV_UPDATESTATUSBAR, OnUpdateStatusbar)
     MESSAGE_HANDLER(WM_CONTEXTMENU, OnContextMenu)
-    MESSAGE_HANDLER(WM_DRAWITEM, OnCustomItem)
-    MESSAGE_HANDLER(WM_MEASUREITEM, OnCustomItem)
+    MESSAGE_HANDLER(WM_DRAWITEM, OnMenuMessage)
+    MESSAGE_HANDLER(WM_MEASUREITEM, OnMenuMessage)
     MESSAGE_HANDLER(WM_SHOWWINDOW, OnShowWindow)
     MESSAGE_HANDLER(WM_GETDLGCODE, OnGetDlgCode)
     MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
@@ -2586,7 +2586,7 @@ LRESULT CDefView::OnCommand(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHand
         case FCIDM_SHVIEW_INVERTSELECTION:
             nCount = m_ListView.GetItemCount();
             for (int i=0; i < nCount; i++)
-                m_ListView.SetItemState(i, m_ListView.GetItemState(i, LVIS_SELECTED) ? 0 : LVIS_SELECTED, LVIS_SELECTED);
+                m_ListView.SetItemState(i, m_ListView.GetItemState(i, LVIS_SELECTED) ^ LVIS_SELECTED, LVIS_SELECTED);
             break;
         case FCIDM_SHVIEW_REFRESH:
             Refresh();
@@ -2923,8 +2923,8 @@ LRESULT CDefView::OnChangeNotify(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &
         ERR("hLock == NULL\n");
         return FALSE;
     }
-
-    TRACE("(%p)(%p,%p,%p)\n", this, Pidls[0], Pidls[1], lParam);
+    lEvent &= ~SHCNE_INTERRUPT;
+    TRACE("(%p)(%p,%p,%p) %#x\n", this, Pidls[0], Pidls[1], lParam, lEvent);
 
     if (_DoFolderViewCB(SFVM_FSNOTIFY, (WPARAM)Pidls, lEvent) == S_FALSE)
     {
@@ -2934,7 +2934,6 @@ LRESULT CDefView::OnChangeNotify(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &
 
     // Translate child IDLs.
     // SHSimpleIDListFromPathW creates fake PIDLs (lacking some attributes)
-    lEvent &= ~SHCNE_INTERRUPT;
     HRESULT hr;
     PITEMID_CHILD child0 = NULL, child1 = NULL;
     CComHeapPtr<ITEMIDLIST_RELATIVE> pidl0Temp, pidl1Temp;
@@ -3010,10 +3009,7 @@ LRESULT CDefView::OnChangeNotify(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &
     return TRUE;
 }
 
-HRESULT SHGetMenuIdFromMenuMsg(UINT uMsg, LPARAM lParam, UINT *CmdId);
-HRESULT SHSetMenuIdInMenuMsg(UINT uMsg, LPARAM lParam, UINT CmdId);
-
-LRESULT CDefView::OnCustomItem(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
+LRESULT CDefView::OnMenuMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
 {
     if (!m_pCM)
     {
@@ -3021,19 +3017,9 @@ LRESULT CDefView::OnCustomItem(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bH
         ERR("no context menu\n");
         return FALSE;
     }
-
-    // lParam of WM_DRAWITEM WM_MEASUREITEM contains a menu id and
-    // this also needs to be changed to a menu identifier offset
-    UINT CmdID;
-    HRESULT hres = SHGetMenuIdFromMenuMsg(uMsg, lParam, &CmdID);
-    if (SUCCEEDED(hres))
-        SHSetMenuIdInMenuMsg(uMsg, lParam, CmdID - CONTEXT_MENU_BASE_ID);
-
-    /* Forward the message to the IContextMenu2 */
-    LRESULT result;
-    hres = SHForwardContextMenuMsg(m_pCM, uMsg, wParam, lParam, &result, TRUE);
-
-    return (SUCCEEDED(hres));
+    LRESULT result = 0;
+    HRESULT hres = SHForwardContextMenuMsg(m_pCM, uMsg, wParam, lParam, &result, TRUE);
+    return SUCCEEDED(hres);
 }
 
 LRESULT CDefView::OnSettingChange(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
@@ -3050,10 +3036,12 @@ LRESULT CDefView::OnInitMenuPopup(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL 
 {
     HMENU hmenu = (HMENU) wParam;
     int nPos = LOWORD(lParam);
-    UINT  menuItemId;
+    UINT menuItemId;
 
+    if (m_isEditing)
+        ListView_CancelEditLabel(m_ListView);
     if (m_pCM)
-        OnCustomItem(uMsg, wParam, lParam, bHandled);
+        OnMenuMessage(uMsg, wParam, lParam, bHandled);
 
     HMENU hViewMenu = GetSubmenuByID(m_hMenu, FCIDM_MENU_VIEW);
 
@@ -4047,7 +4035,7 @@ HRESULT STDMETHODCALLTYPE CDefView::GetSelectedObjects(PCUITEMID_CHILD **pidl, U
             return E_OUTOFMEMORY;
         }
 
-        /* it's documented that caller shouldn't PIDLs, only array itself */
+        // It's documented that caller shouldn't free the PIDLs, only the array itself
         memcpy(*pidl, m_apidl, *items * sizeof(PCUITEMID_CHILD));
     }
 
