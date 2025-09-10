@@ -6,7 +6,7 @@
 */
 
 #include <precomp.h>
-#include "../xdk/winnt_old.h"
+#include <winnt.h>
 
 
 _CRTIMP

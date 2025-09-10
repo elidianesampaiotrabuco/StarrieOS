@@ -22,7 +22,7 @@
 #include <string.h>
 #include "windef.h"
 #include "winbase.h"
-#include "../xdk/winnt_old.h"
+#include "winnt.h"
 #include "winternl.h"
 #include "winerror.h"
 #include "wine/debug.h"

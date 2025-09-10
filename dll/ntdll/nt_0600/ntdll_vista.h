@@ -8,7 +8,7 @@
 #define WIN32_NO_STATUS
 #include <windef.h>
 #include <winbase.h>
-#include "../xdk/winnt_old.h"
+#include <winnt.h>
 
 #define NTOS_MODE_USER
 #include <ndk/rtlfuncs.h>

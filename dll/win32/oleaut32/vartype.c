@@ -27,7 +27,7 @@
 #include "wine/debug.h"
 #include "winbase.h"
 #include "winuser.h"
-#include "../xdk/winnt_old.h"
+#include "winnt.h"
 #include "variant.h"
 #include "resource.h"
 

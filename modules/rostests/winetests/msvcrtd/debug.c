@@ -22,7 +22,7 @@
 
 #include "windef.h"
 #include "winbase.h"
-#include "../xdk/winnt_old.h"
+#include "winnt.h"
 
 #include "crtdbg.h"
 

@@ -34,7 +34,7 @@
 #include <libxml/xpath.h>
 
 #include "windef.h"
-#include "../xdk/winnt_old.h"
+#include "winnt.h"
 
 typedef struct _parser_param {
     void* yyscanner;
