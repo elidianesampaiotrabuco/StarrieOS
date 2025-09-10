@@ -78,6 +78,6 @@ ProductOption = 0
 
 ; Enable this section to enable the default ReactOS theme
 ; [Shell]
-; DefaultThemesOff = no
-; CustomDefaultThemeFile = "%WINDIR%\Resources\Themes\Lautus\lautus.msstyles"
+; DefaultThemesOff = yes
+; CustomDefaultThemeFile = "%WINDIR%\Resources\Themes\HoloV2\holoii.msstyles"
 

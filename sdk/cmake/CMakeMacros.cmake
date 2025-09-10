@@ -245,7 +245,7 @@ macro(dir_to_num dir var)
         set(${var} 79)
     elseif(${dir} STREQUAL reactos/winsxs/arm64_microsoft.windows.gdiplus_6595b64144ccf1df_1.0.14393.0_none_deadbeef)
         set(${var} 81)
-elseif(${dir} STREQUAL reactos/Resources/Themes/Holo)
+elseif(${dir} STREQUAL reactos/Resources/Themes/HoloV2)
         set(${var} 82)
 
 
