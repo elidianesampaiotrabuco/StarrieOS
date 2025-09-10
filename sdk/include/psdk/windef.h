@@ -199,7 +199,7 @@ typedef unsigned int *LPUINT;
 
 
 #ifndef NT_INCLUDED
-#include <winnt.h>
+#include "../xdk/winnt_old.h"
 #endif
 
 //#include <specstrings.h>

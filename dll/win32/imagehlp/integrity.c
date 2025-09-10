@@ -28,7 +28,7 @@
 #include "winbase.h"
 #include "winerror.h"
 #include "winternl.h"
-#include "winnt.h"
+#include "../xdk/winnt_old.h"
 #include "imagehlp.h"
 #include "wine/debug.h"
 

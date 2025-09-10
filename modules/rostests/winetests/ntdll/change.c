@@ -21,7 +21,7 @@
 #include <ntstatus.h>
 #define WIN32_NO_STATUS
 #include <windows.h>
-#include <winnt.h>
+#include "../xdk/winnt_old.h"
 #include <winternl.h>
 #include <winerror.h>
 #include <stdio.h>
