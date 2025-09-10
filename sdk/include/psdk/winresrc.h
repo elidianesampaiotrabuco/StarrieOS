@@ -3,7 +3,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <winuser.h>
-#include <winnt.h>
+#include "../xdk/winnt_old.h"
 #include <winver.h>
 #include <dde.h>
 #include <dlgs.h>
