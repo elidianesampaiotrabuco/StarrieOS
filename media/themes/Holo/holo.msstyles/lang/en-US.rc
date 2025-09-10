@@ -1,0 +1,37 @@
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+STRINGTABLE
+{
+1000, "Standard"
+}
+
+STRINGTABLE
+{
+2000, "Holo Standard"
+}
+
+STRINGTABLE
+{
+3000, "Normal"
+3001, "Large Fonts"
+3002, "Extra Large Fonts"
+}
+
+STRINGTABLE
+{
+4000, "Normal"
+4001, "Large Fonts"
+4002, "Extra Large Fonts"
+}
+
+STRINGTABLE
+{
+5000, "Holo"
+5001, "Visual Style"
+5002, "ReactOS Foundation"
+5003, "MSLE789, based on the holographic UI from early builds of Android Honeycomb"
+5004, "Released under GNU/GPL 3.0, 2025"
+5005, "https://github.com/elidianesampaiotrabuco/StarrieOS-Holographic"
+5006, "1.0"
+5007, "Visual Style for StarrieOS"
+}
