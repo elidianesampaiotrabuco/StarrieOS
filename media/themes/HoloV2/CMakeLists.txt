@@ -1,2 +1,2 @@
 
-add_subdirectory(mizu.msstyles)
+add_subdirectory(holoii.msstyles)
